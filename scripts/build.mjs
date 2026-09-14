@@ -1,12 +1,17 @@
 /**
- * build.mjs — 将 vla-tech.md 转换为自包含的 index.html
- * 用法：node build.mjs
+ * build.mjs — 将 docs/vla-tech.md 转换为自包含的 index.html
+ * 用法：node scripts/build.mjs（或 npm run build）
  * 依赖：marked（npm install marked）
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { marked } from 'marked';
 
-const md = readFileSync('vla-tech.md', 'utf8');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const MD_PATH = join(ROOT, 'docs', 'vla-tech.md');
+const OUT_PATH = join(ROOT, 'index.html');
+const md = readFileSync(MD_PATH, 'utf8');
 
 // ---- 生成标题目录（TOC）----
 const lines = md.split('\n');
@@ -22,6 +27,7 @@ for (const line of lines) {
 }
 
 // ---- 配置 marked ----
+let extraHeadingSeq = 0; // 不在 TOC 中的标题（h1）用确定性序号 id，避免每次构建产生 diff
 marked.use({
   gfm: true,
   renderer: {
@@ -36,9 +42,8 @@ marked.use({
     // 标题注入锚点 id，供 TOC 跳转
     heading({ tokens, depth }) {
       const text = this.parser.parseInline(tokens);
-      const slug = (tocSeq && false) ? '' : '';
       const idx = toc.findIndex((t) => t.text === text.replace(/<[^>]+>/g, '').trim());
-      const id = idx >= 0 ? toc[idx].id : `h-${depth}-${Math.random().toString(36).slice(2, 7)}`;
+      const id = idx >= 0 ? toc[idx].id : `h-${++extraHeadingSeq}`;
       return `<h${depth} id="${id}">${text}</h${depth}>`;
     },
   },
@@ -122,5 +127,5 @@ ${bodyHtml}
 </html>
 `;
 
-writeFileSync('index.html', html, 'utf8');
-console.log(`✔ index.html 已生成（${(html.length / 1024).toFixed(1)} KB，TOC ${toc.length} 项）`);
+writeFileSync(OUT_PATH, html, 'utf8');
+console.log(`✔ ${OUT_PATH} 已生成（${(html.length / 1024).toFixed(1)} KB，TOC ${toc.length} 项）`);
