@@ -9,14 +9,15 @@ daff_page/
 ├── docs/
 │   └── vla-tech.md        # 源文档（Markdown，唯一需要手工编辑的内容）
 ├── scripts/
-│   └── build.mjs          # 构建脚本：md → HTML
-├── index.html             # 构建产物（部署入口，勿手改）
+│   └── build.mjs          # 构建脚本：md → index.html + worker.js
+├── index.html             # 构建产物（本地预览 / 部署入口，勿手改）
+├── worker.js              # 构建产物（Cloudflare Worker，内嵌 HTML，勿手改）
 ├── package.json           # npm 配置（build 脚本 + marked 依赖）
 ├── package-lock.json      # 依赖锁文件
 └── .gitignore             # 忽略 node_modules 等
 ```
 
-> `index.html` 由构建脚本生成，修改源文档后需重新构建；不要直接编辑它。
+> `index.html` 与 `worker.js` 均由构建脚本自动生成，修改源文档后需重新构建；不要直接编辑它们。
 
 ## 前置要求
 
@@ -60,7 +61,18 @@ git push
 
 ## 部署到 Cloudflare
 
-仓库已连接 Cloudflare，推送 `main` 分支即触发自动部署。
+### Cloudflare Workers（推荐，与当前 worker.js 部署方式一致）
+
+构建时已自动生成 `worker.js`（内嵌完整页面 HTML），无需额外配置：
+
+1. 打开 [Cloudflare Dashboard](https://dash.cloudflare.com) → Workers & Pages → 你的 Worker
+2. 进入「编辑代码」，把仓库根目录 `worker.js` 的**全部内容**粘贴替换
+3. 点击「部署」（Deploy）
+4. 访问你的 Worker 域名即可看到页面
+
+以后更新内容：编辑 `docs/vla-tech.md` → `npm run build` → 重新粘贴 `worker.js` 内容 → 部署。
+
+> 若用 `wrangler deploy` 命令行部署，需登录 Cloudflare 账号（`npx wrangler login`）后执行 `npx wrangler deploy`。
 
 ### Cloudflare Pages（Git 集成）
 
@@ -68,16 +80,6 @@ git push
 | --- | --- |
 | Build command | `npm run build` |
 | Build output directory | `/`（根目录） |
-
-### Cloudflare Workers（wrangler）
-
-如使用 `wrangler deploy`，需在仓库根目录添加 `wrangler.toml` 并配置静态资产目录（指向根目录或构建产物目录），示例：
-
-```toml
-name = "daff_page"
-compatibility_date = "2025-01-01"
-assets = { directory = "./" }
-```
 
 ## 技术说明
 

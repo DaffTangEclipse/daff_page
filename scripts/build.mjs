@@ -11,6 +11,7 @@ import { marked } from 'marked';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MD_PATH = join(ROOT, 'docs', 'vla-tech.md');
 const OUT_PATH = join(ROOT, 'index.html');
+const WORKER_PATH = join(ROOT, 'worker.js');
 const md = readFileSync(MD_PATH, 'utf8');
 
 // ---- 生成标题目录（TOC）----
@@ -129,3 +130,28 @@ ${bodyHtml}
 
 writeFileSync(OUT_PATH, html, 'utf8');
 console.log(`✔ ${OUT_PATH} 已生成（${(html.length / 1024).toFixed(1)} KB，TOC ${toc.length} 项）`);
+
+// ---- 生成 Cloudflare Worker（内嵌 HTML）----
+// 用 JSON.stringify 生成合法 JS 字符串字面量，HTML 中的引号/反引号/${} 均安全转义
+const worker = `/**
+ * Cloudflare Worker — daff_page 静态页面服务
+ * 本文件由 scripts/build.mjs 自动生成，请勿手改。
+ * 更新页面：编辑 docs/vla-tech.md 后运行 npm run build。
+ * 部署：将本文件内容粘贴到 Cloudflare Dashboard → Workers → 代码编辑器。
+ */
+const HTML = ${JSON.stringify(html)};
+
+export default {
+  async fetch(request, env, ctx) {
+    return new Response(HTML, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  },
+};
+`;
+
+writeFileSync(WORKER_PATH, worker, 'utf8');
+console.log(`✔ ${WORKER_PATH} 已生成（${(worker.length / 1024).toFixed(1)} KB，可直接粘贴到 Cloudflare）`);
