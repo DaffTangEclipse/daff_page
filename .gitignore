@@ -145,3 +145,7 @@ vite.config.ts.timestamp-*
 # Wrangler
 .wrangler/
 .wrangler.toml
+
+# 本站点部署产物：dist/ 必须提交（Cloudflare 构建仅执行 deploy，不执行 build）
+!dist/
+!dist/**

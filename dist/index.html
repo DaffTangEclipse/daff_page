@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图书馆机器人 VLA 算法技术落地可行性报告</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-light.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>
+  :root { --toc-w: 280px; --border: #d8dee4; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: #fff; color: #1f2328;
+         font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  /* 顶部站点导航 */
+  .sitenav { display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: center;
+             padding: 10px 24px; background: #f6f8fa; border-bottom: 1px solid var(--border); }
+  .sitenav .label { font-size: 12px; color: #57606a; margin-right: 4px; }
+  .sitenav a { color: #0969da; text-decoration: none; font-size: 14px; }
+  .sitenav a:hover { text-decoration: underline; }
+  .layout { display: flex; min-height: 100vh; }
+  /* 左侧目录 */
+  .toc {
+    width: var(--toc-w); flex: 0 0 var(--toc-w);
+    border-right: 1px solid var(--border);
+    padding: 28px 18px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: #fff; font-size: 14px;
+  }
+  .toc .brand { font-weight: 700; font-size: 15px; margin-bottom: 6px; color: #0969da; }
+  .toc .brand-sub { font-size: 12px; color: #57606a; margin-bottom: 18px; }
+  .toc a { display: block; padding: 5px 10px; margin: 1px 0; border-radius: 6px;
+           color: #24292f; text-decoration: none; line-height: 1.45; }
+  .toc a:hover { background: #eaeef2; color: #0969da; }
+  /* 右侧正文 */
+  .content { flex: 1; min-width: 0; padding: 40px 48px 80px; }
+  .markdown-body { max-width: 960px; margin: 0 auto; }
+  .markdown-body h1 { padding-bottom: .3em; border-bottom: 1px solid var(--border); }
+  .markdown-body pre { border-radius: 8px; }
+  .markdown-body pre.mermaid { background: #fff; text-align: center; border: 1px dashed var(--border); }
+  .markdown-body table { display: table; width: 100%; }
+  .markdown-body img { max-width: 100%; }
+  /* 移动端 */
+  @media (max-width: 860px) {
+    .layout { flex-direction: column; }
+    .toc { width: 100%; flex: none; height: auto; position: static; max-height: 40vh; }
+    .content { padding: 24px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+<nav class="sitenav" aria-label="站点导航"><span class="label">📄 页面：</span><a href="/beauty_vim">beauty_vim</a><a href="/">vla-tech</a></nav>
+<div class="layout">
+  <nav class="toc" aria-label="目录">
+    <div class="brand">📚 本页目录</div>
+    <div class="brand-sub">图书馆机器人 VLA 算法技术落地可行性报告</div>
+    <a href="#toc-1">已知条件与算法目标</a><a href="#toc-2">一、算法问题定义</a><a href="#toc-3" style="padding-left:18px;font-size:12.5px;">1.1 任务边界</a><a href="#toc-4" style="padding-left:18px;font-size:12.5px;">1.2 性能约束</a><a href="#toc-5">二、候选算法选型</a><a href="#toc-6" style="padding-left:18px;font-size:12.5px;">2.1 选型原则</a><a href="#toc-7" style="padding-left:18px;font-size:12.5px;">2.2 候选模型对比</a><a href="#toc-8" style="padding-left:18px;font-size:12.5px;">2.3 选型结论：双模型策略</a><a href="#toc-9">三、算法系统架构</a><a href="#toc-10">四、数据与训练方案</a><a href="#toc-11" style="padding-left:18px;font-size:12.5px;">4.1 数据采集</a><a href="#toc-12" style="padding-left:18px;font-size:12.5px;">4.2 后训练流程（对标 GR00T N1.7 官方流程）</a><a href="#toc-13" style="padding-left:18px;font-size:12.5px;">4.3 闭环评测</a><a href="#toc-14" style="padding-left:18px;font-size:12.5px;">4.4 部署</a><a href="#toc-15">五、分阶段落地计划</a><a href="#toc-16" style="padding-left:18px;font-size:12.5px;">5.1 快速落地版（2026-10 — 2027-03）</a><a href="#toc-17" style="padding-left:18px;font-size:12.5px;">5.2 升级优化版（2027-04 — 2028-03）</a><a href="#toc-18" style="padding-left:18px;font-size:12.5px;">5.3 未来规划（2028 及以后）</a><a href="#toc-19">六、软件算法预算</a><a href="#toc-20">七、风险与对策</a><a href="#toc-21">八、结论</a><a href="#toc-22">Sources</a>
+  </nav>
+  <main class="content">
+    <article class="markdown-body">
+<h1 id="h-1">图书馆机器人 VLA 算法技术落地可行性报告</h1><h2 id="toc-1">已知条件与算法目标</h2><p><strong>硬件接口</strong></p>
+<ul>
+<li>整机：供应链提供</li>
+<li>动作空间：末端位姿 / 关节角，ROS 2 接口开放，可加装算力模组</li>
+<li>观测：头部相机 + 腕部相机 + 激光雷达 + IMU / 轮式里程计</li>
+</ul>
+<p><strong>数据条件</strong></p>
+<ul>
+<li>公司主业为数据标注，采集、清洗、标注自有产能</li>
+<li>采用 UMI 手持夹爪范式采集，成本约遥操作 1/10、速度 5×</li>
+</ul>
+<p><strong>算法栈</strong></p>
+<ul>
+<li>开源 VLA 模型可选：SmolVLA（450M, Apache 2.0）、π0.5（3.3B, Apache 2.0 骨干 Gemma 条款）、GR00T N1.7（3B, Apache 2.0 明确商用）</li>
+<li>训练框架：LeRobot（Apache 2.0），官方后训练脚本</li>
+<li>推理门槛：RTX 4090（24GB）可训练 SmolVLA；π0.5 LoRA 需 22.5GB 显存起步</li>
+</ul>
+<p><strong>算法目标</strong></p>
+<p>训练一版图书馆取放书场景的 VLA 模型，使机器人基于视觉观测 + 语言指令自主完成「导航到架 → 抓取图书 → 插入书位」的操作决策。核心指标：固定书架取放成功率 ≥85%（快速落地版）→ 开放书架 ≥95%（升级优化版）。</p>
+<hr>
+<h2 id="toc-2">一、算法问题定义</h2><h3 id="toc-3">1.1 任务边界</h3><p>VLA 只负责「手」的操作决策——即书架前的抓取与放置动作生成。导航、调度、对话采用成熟技术栈，通过 ROS 2 解耦。本报告聚焦 VLA 操作栈的训练与部署。</p>
+<p><strong>VLA 输入输出</strong></p>
+<ul>
+<li>输入：头部/腕部相机图像 + 机器人本体状态（关节角 / 位姿）+ 任务语言指令（如&quot;把这本书放到第 3 排第 5 本位置&quot;）</li>
+<li>输出：末端位姿动作序列（action chunk，一次预测 10–20 步，覆盖 50Hz 控制周期）</li>
+</ul>
+<p><strong>任务分工</strong></p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th align="center">VLA 承担</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>还书上架</td>
+<td align="center">✓</td>
+<td>从还书箱抓取 → 按索书号导航至书架 → 插入指定层位</td>
+</tr>
+<tr>
+<td>按号取书</td>
+<td align="center">✓</td>
+<td>到指定书位取出图书送至取书台</td>
+</tr>
+<tr>
+<td>错架巡检</td>
+<td align="center">✗</td>
+<td>视觉 OCR + 导航，非 VLA</td>
+</tr>
+<tr>
+<td>读者引导</td>
+<td align="center">✗</td>
+<td>对话模型 + 导航，非 VLA</td>
+</tr>
+</tbody></table>
+<h3 id="toc-4">1.2 性能约束</h3><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>快速落地版</th>
+<th>升级优化版</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>取放成功率</td>
+<td>≥85%（固定书架）</td>
+<td>≥95%（开放书架）</td>
+</tr>
+<tr>
+<td>单任务周期</td>
+<td>≤120 s</td>
+<td>≤90 s</td>
+</tr>
+<tr>
+<td>推理频率</td>
+<td>≥5 Hz（抓放可容忍 200–500ms 延迟）</td>
+<td>同左，action chunking 覆盖 50Hz 控制</td>
+</tr>
+<tr>
+<td>部署算力</td>
+<td>Jetson AGX Orin</td>
+<td>Jetson AGX Thor / Orin</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>图书 0.3–2kg、开本 32 开 / 16 开；书架 0.3–2.2m（升降立柱覆盖）。这些是训练数据分布需覆盖的物理约束。</p>
+</blockquote>
+<hr>
+<h2 id="toc-5">二、候选算法选型</h2><h3 id="toc-6">2.1 选型原则</h3><ul>
+<li><strong>License 干净</strong>：优先 Apache 2.0 明确商用授权，规避 Gemma / Llama 附加条款的法务成本；</li>
+<li><strong>推理硬件可及</strong>：消费级 GPU / Jetson 可实时推理；</li>
+<li><strong>后训练生态成熟</strong>：有官方微调脚本与文档，小数据（数百条轨迹）即可适配；</li>
+<li><strong>动作空间对接友好</strong>：关节 / 末端位姿接口开放可对接。</li>
+</ul>
+<h3 id="toc-7">2.2 候选模型对比</h3><p><strong>表 1 · 候选开源 VLA 模型对比（数据来源见文末 Sources）</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>参数量</th>
+<th>商用 License</th>
+<th>推理硬件门槛</th>
+<th>RTX 4090 频率</th>
+<th>微调门槛</th>
+<th>生态工具</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SmolVLA</td>
+<td>450M</td>
+<td>Apache 2.0</td>
+<td>消费级 GPU / Orin 量化</td>
+<td>约 20+ Hz</td>
+<td>低（消费级硬件）</td>
+<td>LeRobot 官方脚本</td>
+</tr>
+<tr>
+<td>π0 / π0.5（openpi）</td>
+<td>3.3B</td>
+<td>Apache 2.0（骨干 Gemma 条款）</td>
+<td>8GB+ 显存起</td>
+<td>约 8–12 Hz</td>
+<td>LoRA 22.5GB 显存起</td>
+<td>openpi 全链路最全</td>
+</tr>
+<tr>
+<td>GR00T N1.7</td>
+<td>3B</td>
+<td>Apache 2.0 明确商用</td>
+<td>Jetson Thor 机载</td>
+<td>未公布</td>
+<td>单卡 48GB 显存</td>
+<td>Isaac 端到端工具链</td>
+</tr>
+<tr>
+<td>RDT2</td>
+<td>7B</td>
+<td>开源（以仓库为准）</td>
+<td>未官方公布</td>
+<td>—</td>
+<td>Post 版未放出</td>
+<td>论文级代码</td>
+</tr>
+<tr>
+<td>OpenVLA</td>
+<td>7B</td>
+<td>权重 Llama 2 条款</td>
+<td>8-bit 约 10GB</td>
+<td>约 3–6 Hz</td>
+<td>LoRA 教程成熟</td>
+<td>Notebook 生态</td>
+</tr>
+</tbody></table>
+<p><strong>图 1 · 候选模型推理频率对比（第三方实测口径，取中值）</strong></p>
+<blockquote>
+<p><em>柱状图，数据见表 1。来源：RoboticsCenter AI 第三方对比（非官方 benchmark），实际数值随动作块长度与量化精度变化。</em></p>
+</blockquote>
+<img src="https://cdn.nlark.com/yuque/0/2026/png/12768172/1789380629145-965fac14-962a-4a89-b001-d105028f7a49.png" width="1172" alt="" title="" crop="0,0,1,1" id="ub17e7ca0" class="ne-image"><blockquote>
+<p><strong>结论：</strong> SmolVLA 在两类硬件上均满足图书馆操作任务对控制频率的需求（抓放类任务可容忍 200–500 ms 延迟，对应 2–5 Hz 即可）；π0/π0.5 经 action chunking 后同样可机载；OpenVLA 频率偏低，仅作为学术基线跟踪。</p>
+</blockquote>
+<h3 id="toc-8">2.3 选型结论：双模型策略</h3><p><strong>算法路线：快速落地用 SmolVLA，升级优化提 π0.5，全程参考 GR00T N1.7 工具链</strong></p>
+<ul>
+<li><strong>快速落地·SmolVLA</strong>：450M 轻量模型，消费级硬件约 20 Hz 推理，Apache 2.0 条款干净；配合 LeRobot 官方训练脚本，<strong>6 个月内完成「数据采集 → 后训练 → 真机验证」的最小闭环</strong>，试错成本最低。</li>
+<li><strong>升级优化·π0.5</strong>：3.3B 主力模型：VLM 骨干 + flow matching 动作专家是当前业界事实标准架构，开放世界泛化能力显著优于小模型；LoRA 微调 22.5GB 显存起步（RTX 4090 24GB 可承担）；Jetson AGX Thor 量化部署约 18–20 Hz。商用前完成 Gemma 条款法务核对。</li>
+<li><strong>工程参考·GR00T N1.7</strong>：不作为直接训练对象（面向人形本体、post-training 需 48GB 显存），但其<strong>数据格式（LeRobot）、后训练流程、ONNX/TensorRT 导出、LEAPP 机载部署方案</strong>是最佳工程范本，全流程照搬其方法论。</li>
+<li><strong>技术跟踪</strong>：RDT2（UMI 数据范式，采集成本 1/10）、StellaVLA（免微调测试时适应）、IMLE-VLA / Jetson-PI（推理加速 3.67× / 8.66×）——作为升级优化版与远期储备。</li>
+</ul>
+<p><strong>演示视频 · SmolVLA 算法操作闭环</strong></p>
+<p>基于 LeRobot + SmolVLA（450M）的模仿学习操作演示，展示 VLA 模型在视觉观测下自主完成抓取—放置动作，对应快速落地版选型的算法可行性验证。</p>
+<p>📎 <strong>附件</strong>：<a href="assets/smolvla_demo.mp4">SmolVLA 演示视频（assets/smolvla_demo.mp4）</a></p>
+<blockquote>
+<p><strong>参考价值：</strong> 该 Demo 对应快速落地版选型——450M 轻量模型在消费级 GPU 上可跑通验证。</p>
+</blockquote>
+<hr>
+<h2 id="toc-9">三、算法系统架构</h2><p>架构原则：<strong>VLA 只负责「手」的操作决策</strong>，导航、调度、对话用成熟栈，通过 ROS 2 解耦集成，降低整体风险。</p>
+<p><strong>图 2 · 系统架构：机载运行时（左）与云端训练闭环（右）</strong></p>
+<blockquote>
+<p><em>实线为运行时数据流，虚线为模型迭代链路；导航栈与 VLA 操作栈在机载 Jetson 上并行运行。</em></p>
+</blockquote>
+<pre class="mermaid">flowchart TD
+    Task["任务下发<br/>读者小程序 / 馆员系统"]:::input
+    subgraph Robot["机器人整机（松灵底盘 + 睿尔曼 RM65 + 升降立柱）"]
+        subgraph Sense["感知层"]
+            Lidar["激光雷达"]
+            Cam["头部相机 + 腕部相机"]
+            IMU["IMU / 轮式里程计"]
+        end
+        subgraph Onboard["机载算力 Jetson AGX Orin"]
+            Fleet["任务调度模块"]
+            Nav["导航栈 ROS 2<br/>SLAM · 路径规划 · 动态避障"]
+            VLA["VLA 操作栈<br/>π0.5 / SmolVLA + 动作分块"]
+        end
+        Chassis["底盘驱动"]
+        Arm["机械臂 + 夹爪 + 升降控制"]
+    end
+    subgraph Cloud["云端开发环境（RTX 4090 工作站）"]
+        Collect["数据采集<br/>UMI 夹爪 + 遥操作"]
+        Train["后训练<br/>LoRA 微调"]
+        Eval["闭环评测<br/>100–1000 episodes"]
+    end
+    Task --> Fleet
+    Fleet --> Nav
+    Fleet --> VLA
+    Lidar --> Nav
+    IMU --> Nav
+    Cam --> VLA
+    Nav --> Chassis
+    VLA --> Arm
+    Collect --> Train --> Eval
+    Eval -. "模型导出 ONNX / TensorRT" .-> VLA
+    classDef input fill:#EAF1FB,stroke:#0969DA,color:#053B75
+    classDef onboard fill:#F6F8FA,stroke:#98A2AE,color:#1F2328
+    classDef cloud fill:#FFFFFF,stroke:#D8DEE4,color:#1F2328
+    class Task input
+    class Fleet,Nav,VLA onboard
+    class Collect,Train,Eval cloud</pre><blockquote>
+<p><strong>设计要点：</strong> 整机到货后仅需打通「Jetson ↔ 底盘/机械臂驱动」的 ROS 2 接口层，VLA 输出末端位姿动作块由驱动层执行；模型迭代在云端完成，经量化导出后热更新到机载端，数据闭环不中断机器人运行。</p>
+</blockquote>
+<hr>
+<h2 id="toc-10">四、数据与训练方案</h2><h3 id="toc-11">4.1 数据采集</h3><ul>
+<li><strong>UMI 手持夹爪</strong>：成本约遥操作 1/10、速度 5×，采集人类操作轨迹，不依赖整机到位（可先行启动）</li>
+<li><strong>遥操作双轨</strong>：补充精细操作与边缘场景</li>
+<li><strong>目标规模</strong>：快速落地版 400 条轨迹（UMI 200 + 遥操作 200），升级优化版扩至 2000+（多馆书架差异覆盖）</li>
+<li><strong>格式</strong>：统一 LeRobot 格式，与 SmolVLA / π0.5 训练脚本对齐</li>
+<li><strong>清洗与标注</strong>：公司现有数据团队执行；失败案例定向补数据以「天」级响应</li>
+</ul>
+<h3 id="toc-12">4.2 后训练流程（对标 GR00T N1.7 官方流程）</h3><ol>
+<li><strong>SmolVLA 全流程跑通</strong>：LeRobot 官方脚本，冻结 VLM 骨干只训练动作专家（flow matching），单卡 RTX 4090 可承担（峰值 10–16GB 显存，BS=8）</li>
+<li><strong>π0.5 LoRA 微调</strong>：22.5GB 显存起步，RTX 4090 24GB 卡线够用；gradient_checkpointing + bfloat16 降显存</li>
+<li><strong>对比实验</strong>：成功率 / 频率 / 泛化三维评估，确定升级优化版主力模型</li>
+</ol>
+<h3 id="toc-13">4.3 闭环评测</h3><ul>
+<li>仿真 + 真机各 100 episodes</li>
+<li>覆盖：光照变化、图书开本差异、遮挡场景</li>
+<li>失败案例定向补数据（自有标注产能「天」级响应，无外包排期）</li>
+</ul>
+<h3 id="toc-14">4.4 部署</h3><ul>
+<li>ONNX 导出 + INT8 量化到 Jetson AGX Orin</li>
+<li>动作分块（action chunking，一次预测 10–20 步）覆盖 50Hz 控制周期</li>
+<li>模型热更新：云端迭代 → 量化导出 → 机载热加载，不中断运行</li>
+</ul>
+<hr>
+<h2 id="toc-15">五、分阶段落地计划</h2><h3 id="toc-16">5.1 快速落地版（2026-10 — 2027-03）</h3><p><strong>目标</strong>：单台原型机在真实书架完成「导航到架 → 取放书 → 返回」全流程闭环，固定书架成功率 ≥85%，周期 ≤120s，输出可复现的技术报告与数据集。</p>
+<p><strong>里程碑</strong></p>
+<table>
+<thead>
+<tr>
+<th>节点</th>
+<th>时间</th>
+<th>交付物 / 验收标准</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>M1</td>
+<td>2026-10</td>
+<td>ROS 2 环境打通；底盘与机械臂遥控联调</td>
+</tr>
+<tr>
+<td>M2</td>
+<td>2026-11</td>
+<td>SLAM 建图与书架点位标定；导航栈连续避障运行</td>
+</tr>
+<tr>
+<td>M3</td>
+<td>2026-12</td>
+<td>数据集 v0.1：UMI 200 + 遥操作 200 条轨迹（LeRobot 格式）</td>
+</tr>
+<tr>
+<td>M4</td>
+<td>2027-01</td>
+<td>SmolVLA 后训练完成；固定书架成功率 ≥70%（阶段值）</td>
+</tr>
+<tr>
+<td>M5</td>
+<td>2027-02</td>
+<td>π0.5 LoRA 对比报告（成功率/频率/泛化三维评估），确定升级版主力</td>
+</tr>
+<tr>
+<td>M6</td>
+<td>2027-03</td>
+<td>验收：全流程闭环 ≥85%；技术报告 + 数据集 + 升级方案细化</td>
+</tr>
+</tbody></table>
+<h3 id="toc-17">5.2 升级优化版（2027-04 — 2028-03）</h3><p><strong>目标</strong>：3 台产品机部署 1–2 个真实图书馆，开放书架成功率 ≥95%、周期 ≤90s、连续运行 ≥4h + 自动回充；建立远程运维与数据回流体系，形成可复制部署 SOP。</p>
+<p><strong>工作流</strong></p>
+<ol>
+<li><strong>模型升级</strong>：以快速落地版胜出模型为基础扩量微调（数据扩至 2000+ 轨迹，多馆书架差异覆盖）</li>
+<li><strong>鲁棒性专项</strong>：动态读者避让、书架拥挤插入、光照剧变场景的失败案例分析与定向补数据</li>
+<li><strong>试点部署</strong>：与图书馆签试点协议，错峰运行（早班前集中上架 + 日间巡检）</li>
+<li><strong>运维平台</strong>：任务看板、异常告警、OTA 模型热更新、运行日志审计</li>
+<li><strong>安全合规</strong>：急停 / 人工接管机制、限速策略、安全评估报告</li>
+</ol>
+<p><strong>交付物</strong></p>
+<ul>
+<li>图书馆操作数据集 v2.0（2000+ 轨迹，具备对外授权潜力）</li>
+<li>运维平台 v1.0 + 部署 SOP + 安全评估报告</li>
+<li>试点运营报告（成功率、周期、故障率、人机协作数据）</li>
+</ul>
+<img src="https://cdn.nlark.com/yuque/0/2026/png/12768172/1789380646075-20c2258e-f49d-4d44-92bd-15a08d9450eb.png" width="1547" alt="" title="" crop="0,0,1,1" id="u47cfde13" class="ne-image"><h3 id="toc-18">5.3 未来规划（2028 及以后）</h3><p><strong>技术演进跟踪</strong></p>
+<table>
+<thead>
+<tr>
+<th>方向</th>
+<th>代表工作</th>
+<th>引入时机与价值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>免微调适应</td>
+<td>StellaVLA（VLA-Arena 榜首 0.63）</td>
+<td>新馆部署免重训，一条结构化演示即可适配，2027 评估引入</td>
+</tr>
+<tr>
+<td>推理加速</td>
+<td>IMLE-VLA（55 Hz）、Jetson-PI（8.66×）</td>
+<td>机载频率不足或任务复杂度上升时按需引入</td>
+</tr>
+<tr>
+<td>零样本泛化</td>
+<td>RDT2（4U 零样本跨本体）</td>
+<td>若 Post 版开源且硬件门槛下降，可跳过逐馆微调</td>
+</tr>
+<tr>
+<td>在线强化学习</td>
+<td>VLA-Precision（98.3%）、π*0.6 RECAP</td>
+<td>从试点运行数据持续提升成功率</td>
+</tr>
+</tbody></table>
+<p><strong>场景扩展</strong>：同一算法底座迁移至档案馆密集架、书店退货整理、仓储轻量拣选——操作模型可迁移，仅数据与工装适配。</p>
+<hr>
+<h2 id="toc-19">六、软件算法预算</h2><blockquote>
+<p>仅训练算力与软件工具，不含整机 / 机载硬件 / 数据采集硬件 / 人力成本。工具链以开源（LeRobot / openpi，Apache 2.0）为主，零许可费。</p>
+</blockquote>
+<p><strong>表 2 · 快速落地版（软件算法）</strong></p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>明细</th>
+<th align="right">金额（万元）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>训练算力</td>
+<td>RTX 4090 工作站 1 台 + 云端按需租用（SmolVLA 峰值 10–16GB 显存，单卡够用）</td>
+<td align="right">7</td>
+</tr>
+<tr>
+<td>数据与评测工具</td>
+<td>LeRobot 数据集管理、仿真评测环境搭建（开源为主，少量存储与管理成本）</td>
+<td align="right">1</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td></td>
+<td align="right"><strong>8</strong></td>
+</tr>
+</tbody></table>
+<p><strong>表 3 · 升级优化版（软件算法）</strong></p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>明细</th>
+<th align="right">金额（万元）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>训练算力</td>
+<td>RTX 4090 扩 1 台 + π0.5 LoRA 按需云租（22.5GB 显存，4090 24GB 卡线够用）</td>
+<td align="right">16</td>
+</tr>
+<tr>
+<td>数据与评测工具</td>
+<td>数据生产管理、闭环评测扩充</td>
+<td align="right">2</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td></td>
+<td align="right"><strong>18</strong></td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>软件算法两阶段合计 <strong>26 万元</strong>。训练算力为主体；数据清洗标注由公司自有产能消化，零外包成本。相比外包标注路径（同等规模数据服务估算 40–60 万元），自有产能是结构性成本优势。</p>
+</blockquote>
+<hr>
+<h2 id="toc-20">七、风险与对策</h2><table>
+<thead>
+<tr>
+<th>风险</th>
+<th>等级</th>
+<th>影响</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>零样本成功率不足</td>
+<td>高</td>
+<td>开源模型直接部署成功率低（如 OpenVLA 零样本 48–62%）低于商业标准</td>
+<td>立项即按「后训练 + 数据闭环」路线，不赌零样本；400 条轨迹起步，失败案例定向补数据——自有标注产能「天」级响应</td>
+</tr>
+<tr>
+<td>License 合规</td>
+<td>中</td>
+<td>π0.5 骨干受 Gemma 条款约束，商用有法务成本</td>
+<td>主力模型均 Apache 2.0（SmolVLA / GR00T N1.7）；π0.5 商用化前完成法务核对，必要时切换 GR00T 路线</td>
+</tr>
+<tr>
+<td>机载推理延迟</td>
+<td>中</td>
+<td>频率不足导致动作「走走停停」</td>
+<td>动作分块（一次预测 10–20 步）覆盖控制周期；Jetson-PI / IMLE-VLA 加速方案为储备</td>
+</tr>
+<tr>
+<td>场景复杂度超分布</td>
+<td>中</td>
+<td>书架拥挤、读者干扰、光照变化超训练分布</td>
+<td>快速落地版固定书架验证，升级优化版逐步开放；错峰运行；StellaVLA 式测试时适应作为升级路径</td>
+</tr>
+<tr>
+<td>数据分布偏移</td>
+<td>中</td>
+<td>新馆书架差异超训练分布</td>
+<td>升级版扩量采集多馆差异；StellaVLA 免微调适应路径</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="toc-21">八、结论</h2><p>技术拐点已至，算法路线务实可控：</p>
+<ul>
+<li>开源 VLA 商用授权（GR00T N1.7 Apache 2.0）、数据成本（UMI 范式 1/10）、机载算力（Jetson 加速方案）三大拐点齐备；</li>
+<li>快速落地版用 SmolVLA（450M）跑通最小闭环，消费级 RTX 4090 可训练，软件预算 8 万；</li>
+<li>升级优化版提 π0.5（3.3B）提升泛化与上限，软件预算 18 万；</li>
+<li>数据飞轮是核心竞争力：公司自有标注产能使补数据「天」级响应，外部团队依赖外包（成本更高、周期不可控），是难以复制的护城河。</li>
+</ul>
+<p><strong>近期行动</strong>：① 启动 SmolVLA + LeRobot 训练环境搭建；② UMI 手持采集先行启动（不依赖整机到位）；③ 招募 / 指定算法 1 人负责训练闭环。</p>
+<hr>
+<h2 id="toc-22">Sources</h2><ol>
+<li><a href="https://developer.nvidia.com/blog/develop-humanoid-robot-policies-end-to-end-with-nvidia-isaac-gr00t">NVIDIA Isaac GR00T 技术博客（2026-07-07）</a> — GR00T N1.7 Apache 2.0 商用授权与端到端工作流</li>
+<li><a href="https://github.com/NVIDIA-ISAAC-GR00T/Isaac-GR00T">NVIDIA Isaac GR00T 代码仓库</a> — GitHub</li>
+<li><a href="https://huggingface.co/nvidia/GR00T-N1.7-3B">GR00T-N1.7-3B 权重</a> — Hugging Face</li>
+<li><a href="https://docs.nvidia.com/learning/physical-ai/gr00t-e2e-workflow/latest/getting-started/prerequisites.html">GR00T E2E Workflow 前置条件</a> — NVIDIA 文档（48GB 显存门槛）</li>
+<li><a href="https://github.com/Physical-Intelligence/openpi">openpi 仓库（π0/π0.5）</a> — GitHub</li>
+<li><a href="https://www.openpi.net/english.html">openpi 官方文档</a> — 推理 8GB+ / LoRA 22.5GB / 全量 70GB 显存门槛</li>
+<li><a href="https://www.jetson-ai-lab.com/tutorials/openpi_on_thor/">openpi on Jetson AGX Thor 部署教程</a> — Jetson AI Lab（π0.5 量化 18–20 Hz）</li>
+<li><a href="https://smolvla.net/">SmolVLA 项目页</a> — HuggingFace（450M，消费级约 20 Hz）</li>
+<li><a href="https://github.com/huggingface/lerobot">LeRobot 仓库</a> — GitHub（Apache 2.0）</li>
+<li><a href="https://rdt-robotics.github.io/rdt2/">RDT2 项目页</a> — UMI 数据范式、零样本跨本体、RVQ + flow matching 三阶段训练</li>
+<li><a href="https://arxiv.org/abs/2602.03310">RDT2 论文</a> — arXiv:2602.03310</li>
+<li><a href="https://arxiv.org/abs/2608.11671">StellaVLA 论文</a> — arXiv:2608.11671（VLA-Arena 榜首 0.63）</li>
+<li><a href="https://arxiv.org/abs/2609.10915">IMLE-VLA 论文</a> — arXiv:2609.10915（55 Hz，IROS 2026）</li>
+<li><a href="https://arxiv.org/abs/2607.12659">Jetson-PI 论文</a> — arXiv:2607.12659（CoRL 2026，机载加速 8.66×）</li>
+<li><a href="https://arxiv.org/abs/2609.04355">VLA-Precision 论文</a> — arXiv:2609.04355（在线 RL，98.3%）</li>
+<li><a href="https://www.figure.ai/news/f-03-at-bmw">Figure AI 官网：F.03 at BMW</a> — 商业落地实证</li>
+<li><a href="https://it.roboticscenter.ai/blog/zero-shot-vs-few-shot-robot-policies">Zero-Shot vs Few-Shot Robot Policies</a> — RoboticsCenter AI（OpenVLA 零样本 48–62% vs 微调 72–80%）</li>
+<li><a href="https://www.roboticscenter.ai/tools/vla-models-comparison/">VLA 模型推理对比</a> — RoboticsCenter AI（第三方实测口径）</li>
+<li><a href="https://github.com/openvla/openvla">OpenVLA 仓库</a> — GitHub</li>
+<li><a href="https://aws.amazon.com/blogs/physical-ai/fine-tuning-openvla-on-amazon-sagemaker-ai-with-lora/">AWS：OpenVLA LoRA 微调</a> — 8-bit 约 10GB 显存</li>
+<li><a href="https://huggingface.co/docs/lerobot/hardware_guide">LeRobot 训练硬件指南</a> — SmolVLA 峰值 10–16GB / π0.5 需 24–40GB</li>
+<li><a href="https://www.cnx-software.com/?p=149841">SO-ARM101 开源机械臂</a> — LeRobot 配套，桌面算法练兵（负载 0.3–0.5kg）</li>
+<li><a href="https://www.roboticscenter.ai/learn/robot-arm-comparison-2026">Robot Arm Comparison 2026</a> — SO-ARM101 / Piper / xArm / Franka 对比</li>
+<li><a href="https://www.realman-robotics.cn/cn/products/rm65.html">睿尔曼 RM65 产品页</a> — 5 kg 负载、610–627 mm 臂展</li>
+<li><a href="https://develop.realman-robotics.com/robot/ros2/driver/">睿尔曼 ROS 2 驱动文档</a> — rm_driver</li>
+<li><a href="https://www.elephantrobotics.com/myagv2023-jn-cn/">大象机器人 myAGV 2023</a> — 内置 Jetson + ROS 2，低成本预研</li>
+<li><a href="https://www.8robot.com/home/Store/index?store_id=1422">松灵科技产品页</a> — Tracer / Scout 底盘</li>
+<li><a href="https://www.dobot.cn/products/cr-series/dobot-cr-series.html">越疆 CR 系列产品页</a> — 机械臂备选</li>
+<li>《2026 年机器人 VLA 论文调研与部署可行性报告》— 本项目内部技术调研，算法与实证数据的完整推导</li>
+</ol>
+<hr>
+
+    </article>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  hljs.highlightAll();
+  mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });
+</script>
+</body>
+</html>

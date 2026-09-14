@@ -1,22 +1,23 @@
 /**
- * build.mjs — 将 docs/*.md 批量转换为 index.html + worker.js（多页路由）
+ * build.mjs — 将 docs/*.md 批量转换为 dist/ 静态站点 + 轻量 worker.js
  * 用法：npm run build
  * 依赖：marked（npm install marked）
  *
  * 约定：
- *  - docs/*.md 每个文件生成一个页面，路由为 /文件名（如 /beauty_vim）
- *  - vla-tech.md 作为默认首页（/），同时保留 /vla-tech 与 /vla-tech.html 路由
+ *  - docs/*.md 每个文件生成 dist/{文件名}.html（静态资产，Cloudflare 直接按路径返回）
+ *  - vla-tech.md 同时作为首页（dist/index.html）
  *  - md 内站内链接写相对路径 xxx.md，构建时自动重写为 xxx.html
- *  - 所有页面共享一个顶部站点导航条，可互相跳转
+ *  - worker.js 仅做友好路由兜底：/xxx → /xxx.html（页面本体全部在 dist/，不再内嵌）
  */
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, rmSync, copyFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
 import { marked } from 'marked';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DOCS_DIR = join(ROOT, 'docs');
-const OUT_PATH = join(ROOT, 'index.html');
+const DIST_DIR = join(ROOT, 'dist');
+const OUT_PATH = join(ROOT, 'index.html'); // 根目录首页副本，仅本地预览用
 const WORKER_PATH = join(ROOT, 'worker.js');
 const HOME_ROUTE = 'vla-tech'; // 默认首页
 
@@ -187,54 +188,54 @@ for (const p of pages) {
   p.tocCount = toc.length;
 }
 
-// index.html 输出首页
-const homePage = pages[homeIdx];
-writeFileSync(OUT_PATH, homePage.html, 'utf8');
-console.log(`✔ ${OUT_PATH} 已生成（${(homePage.html.length / 1024).toFixed(1)} KB，首页 ${homePage.route}）`);
+// ---- 输出静态资产到 dist/ ----
+// 每次构建清空 dist，防止旧页面残留
+rmSync(DIST_DIR, { recursive: true, force: true });
+mkdirSync(DIST_DIR, { recursive: true });
 
-// ---- 生成 Cloudflare Worker（多页路由，内嵌全部 HTML）----
-// JSON.stringify 生成合法 JS 字符串字面量，引号/反引号/${} 均安全转义
-const routeEntries = new Map();
 for (const p of pages) {
-  const key = p.route === pages[homeIdx].route ? '/' : `/${p.route}`;
-  routeEntries.set(key, p.html);
-  routeEntries.set(key + '.html', p.html);
+  writeFileSync(join(DIST_DIR, `${p.route}.html`), p.html, 'utf8');
 }
-// 首页额外别名：/vla-tech、/vla-tech.html
-if (homePage.route !== '/') {
-  routeEntries.set(`/${homePage.route}`, homePage.html);
-  routeEntries.set(`/${homePage.route}.html`, homePage.html);
-}
+// 首页别名 index.html
+const homePage = pages[homeIdx];
+writeFileSync(join(DIST_DIR, 'index.html'), homePage.html, 'utf8');
+// 根目录首页副本（仅本地双击预览用，部署一律走 dist/）
+writeFileSync(OUT_PATH, homePage.html, 'utf8');
 
-const pagesObject = [...routeEntries.entries()]
-  .map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)}`)
-  .join(',\n');
+console.log(`✔ ${DIST_DIR}/ 已生成 ${pages.length} 个页面（${[...pages.map((p) => `${p.route}.html`), 'index.html'].join(', ')}）`);
 
+// ---- 生成 Cloudflare Worker（轻量路由兜底，页面本体在 dist/ 静态资产）----
 const worker = `/**
- * Cloudflare Worker — daff_page 静态页面服务（多页路由）
+ * Cloudflare Worker — daff_page 静态资产路由兜底
  * 本文件由 scripts/build.mjs 自动生成，请勿手改。
- * 更新页面：编辑 docs/*.md 后运行 npm run build。
- * 部署：将本文件内容粘贴到 Cloudflare Dashboard → Workers → 代码编辑器。
+ *
+ * 静态页面由 dist/ 目录提供（见 wrangler.jsonc 的 assets 配置），
+ * 本 worker 仅负责友好路由：
+ *   - /beauty_vim   → 尝试 /beauty_vim.html（无扩展名路径补 .html）
+ *   - 其余请求      → 交给静态资产（存在返回文件，不存在返回 404）
  */
-const PAGES = {
-${pagesObject},
-};
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const path = url.pathname.replace(/\\/+$/, '') || '/';
-    const page = PAGES[path] ?? PAGES['/'];
-    return new Response(page, {
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600',
-      },
-    });
+    const path = url.pathname;
+
+    // 根路径直接交给静态资产（index.html）
+    if (path === '/') {
+      return env.ASSETS.fetch(request);
+    }
+
+    // 无扩展名路径 → 尝试补 .html（如 /beauty_vim → /beauty_vim.html）
+    if (!path.includes('.')) {
+      const probe = new Request(url.origin + path + '.html', request);
+      const res = await env.ASSETS.fetch(probe);
+      if (res.status !== 404) return res;
+    }
+
+    // 其余（含 .html 后缀、静态资源、404）交给静态资产处理
+    return env.ASSETS.fetch(request);
   },
 };
 `;
 
 writeFileSync(WORKER_PATH, worker, 'utf8');
-console.log(`✔ ${WORKER_PATH} 已生成（${(worker.length / 1024).toFixed(1)} KB，${routeEntries.size} 条路由）`);
-console.log('  路由：', [...routeEntries.keys()].join('  '));
+console.log(`✔ ${WORKER_PATH} 已生成（${(worker.length / 1024).toFixed(1)} KB，轻量路由兜底）`);

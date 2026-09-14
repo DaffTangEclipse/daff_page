@@ -10,11 +10,15 @@ daff_page/
 │   ├── vla-tech.md        # 源文档 1：VLA 报告（默认首页 /）
 │   └── beauty_vim.md      # 源文档 2：Vim/终端配置笔记（路由 /beauty_vim）
 ├── scripts/
-│   ├── build.mjs          # 构建脚本：扫描 docs/*.md → index.html + worker.js（多页路由）
-│   └── server.mjs         # 本地开发服务器：模拟 Cloudflare Worker 返回页面
-├── index.html             # 构建产物（首页 HTML，勿手改）
-├── worker.js              # 构建产物（Cloudflare Worker，内嵌全部页面 + 路由，勿手改）
-├── wrangler.jsonc         # Cloudflare Workers 配置（main: worker.js）
+│   ├── build.mjs          # 构建脚本：扫描 docs/*.md → dist/ 静态站点 + 轻量 worker.js
+│   └── server.mjs         # 本地开发服务器：模拟 Cloudflare Worker（静态资产模式）
+├── dist/                  # 构建产物：独立 HTML 静态文件（部署资产，勿手改）
+│   ├── index.html         # 首页
+│   ├── vla-tech.html
+│   └── beauty_vim.html
+├── index.html             # 根目录首页副本（仅本地预览用，勿手改）
+├── worker.js              # 构建产物（轻量路由兜底：/xxx → /xxx.html，勿手改）
+├── wrangler.jsonc         # Cloudflare Workers 配置（main + assets 指向 dist/）
 ├── package.json           # npm 配置（build/dev 脚本 + marked 依赖）
 ├── package-lock.json      # 依赖锁文件
 └── .gitignore             # 忽略 node_modules / .wrangler 等
@@ -103,18 +107,29 @@ git push
 
 ## 部署到 Cloudflare
 
-### Cloudflare Workers（推荐，与当前 worker.js 部署方式一致）
+## 部署架构（Workers Static Assets）
 
-构建时已自动生成 `worker.js`（内嵌完整页面 HTML），无需额外配置：
+页面以**独立静态文件**形式部署，不再内嵌进 Worker：
+
+```
+请求 → Cloudflare 边缘
+        ├─ /beauty_vim.html 等静态文件 → 直接返回 dist/ 下的文件（CDN 缓存）
+        └─ /beauty_vim 等无扩展名路径 → worker.js 轻量兜底，补 .html 后交给静态资产
+```
+
+- `wrangler.jsonc`：`assets.directory = "./dist"`，`binding = "ASSETS"`（worker 通过 `env.ASSETS.fetch()` 访问）
+- `worker.js` 仅 0.8 KB：只做 `/xxx → /xxx.html` 的友好路由，**页面本体全部在 dist/，不随脚本体积增长**
+- 新增文档只增加 `dist/` 里的文件，Worker 脚本大小恒定
+
+### Cloudflare Workers（推荐，与当前 worker.js 部署方式一致）
 
 1. 打开 [Cloudflare Dashboard](https://dash.cloudflare.com) → Workers & Pages → 你的 Worker
 2. 进入「编辑代码」，把仓库根目录 `worker.js` 的**全部内容**粘贴替换
-3. 点击「部署」（Deploy）
-4. 访问你的 Worker 域名即可看到页面
+3. 在「设置」→「绑定」中确认存在 **Assets / ASSETS 绑定**，目录指向构建产出的 `dist/`
+4. 点击「部署」（Deploy）
+5. 访问你的 Worker 域名即可看到页面
 
-以后更新内容：编辑 `docs/vla-tech.md` → `npm run build` → 重新粘贴 `worker.js` 内容 → 部署。
-
-> 若用 `wrangler deploy` 命令行部署，需登录 Cloudflare 账号（`npx wrangler login`）后执行 `npx wrangler deploy`。
+以后更新内容：编辑 `docs/*.md` → `npm run build` → 提交并推送（`dist/` 与 `worker.js` 会一并更新）→ 部署。
 
 ### Cloudflare Pages（Git 集成）
 
