@@ -7,12 +7,13 @@
 ```
 daff_page/
 ├── docs/
-│   └── vla-tech.md        # 源文档（Markdown，唯一需要手工编辑的内容）
+│   ├── vla-tech.md        # 源文档 1：VLA 报告（默认首页 /）
+│   └── beauty_vim.md      # 源文档 2：Vim/终端配置笔记（路由 /beauty_vim）
 ├── scripts/
-│   ├── build.mjs          # 构建脚本：md → index.html + worker.js
+│   ├── build.mjs          # 构建脚本：扫描 docs/*.md → index.html + worker.js（多页路由）
 │   └── server.mjs         # 本地开发服务器：模拟 Cloudflare Worker 返回页面
-├── index.html             # 构建产物（本地预览 / 部署入口，勿手改）
-├── worker.js              # 构建产物（Cloudflare Worker，内嵌 HTML，勿手改）
+├── index.html             # 构建产物（首页 HTML，勿手改）
+├── worker.js              # 构建产物（Cloudflare Worker，内嵌全部页面 + 路由，勿手改）
 ├── wrangler.jsonc         # Cloudflare Workers 配置（main: worker.js）
 ├── package.json           # npm 配置（build/dev 脚本 + marked 依赖）
 ├── package-lock.json      # 依赖锁文件
@@ -61,6 +62,30 @@ start index.html
 | 适用场景 | 本项目（单页面，无绑定）够用 | 需要调试完整 Worker 环境时 |
 
 本项目的 Worker 只有一个 `fetch` 返回内嵌 HTML，`npm run dev` 已足够且无 Node 版本门槛；`npx wrangler dev` 是官方全能方案，但需要 Node ≥ 22。
+
+## 多页面与站内链接
+
+`npm run build` 会扫描 `docs/*.md`，**每个文件生成一个独立页面**：
+
+| 源文件 | 路由 | 说明 |
+| --- | --- | --- |
+| `docs/vla-tech.md` | `/`（及 `/vla-tech`、`/vla-tech.html`） | 默认首页 |
+| `docs/beauty_vim.md` | `/beauty_vim`（及 `/beauty_vim.html`） | 自动生成的第二页 |
+
+**页面间跳转方式：**
+
+1. **自动导航条**：每个页面顶部自动生成站点导航（列出全部页面），点击即跳转；
+2. **md 内写链接**：在 Markdown 里用相对路径引用其他文档，构建时自动重写：
+
+```markdown
+[Vim 配置笔记](beauty_vim.md)
+```
+
+构建后链接会自动变成 `beauty_vim.html`（Worker 路由同时接受 `/beauty_vim` 与 `/beauty_vim.html`），点击即可跳转。
+
+> ⚠️ 不要用 `file:///...` 绝对本地路径写链接（如 `[xxx](file:///D:/.../xxx.md)`），部署到 Cloudflare 后无效。
+
+新增页面只需往 `docs/` 放一个 `.md` 文件，重新构建即自动出现在导航条与路由表中。
 
 ## 更新文档
 

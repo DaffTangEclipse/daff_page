@@ -12,13 +12,19 @@
   html { scroll-behavior: smooth; }
   body { margin: 0; background: #fff; color: #1f2328;
          font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  /* 顶部站点导航 */
+  .sitenav { display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: center;
+             padding: 10px 24px; background: #f6f8fa; border-bottom: 1px solid var(--border); }
+  .sitenav .label { font-size: 12px; color: #57606a; margin-right: 4px; }
+  .sitenav a { color: #0969da; text-decoration: none; font-size: 14px; }
+  .sitenav a:hover { text-decoration: underline; }
   .layout { display: flex; min-height: 100vh; }
   /* 左侧目录 */
   .toc {
     width: var(--toc-w); flex: 0 0 var(--toc-w);
     border-right: 1px solid var(--border);
     padding: 28px 18px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
-    background: #f6f8fa; font-size: 14px;
+    background: #fff; font-size: 14px;
   }
   .toc .brand { font-weight: 700; font-size: 15px; margin-bottom: 6px; color: #0969da; }
   .toc .brand-sub { font-size: 12px; color: #57606a; margin-bottom: 18px; }
@@ -42,9 +48,10 @@
 </style>
 </head>
 <body>
+<nav class="sitenav" aria-label="站点导航"><span class="label">📄 页面：</span><a href="/beauty_vim">beauty_vim</a><a href="/">vla-tech</a></nav>
 <div class="layout">
   <nav class="toc" aria-label="目录">
-    <div class="brand">📚 报告导航</div>
+    <div class="brand">📚 本页目录</div>
     <div class="brand-sub">图书馆机器人 VLA 算法技术落地可行性报告</div>
     <a href="#toc-1">已知条件与算法目标</a><a href="#toc-2">一、算法问题定义</a><a href="#toc-3" style="padding-left:18px;font-size:12.5px;">1.1 任务边界</a><a href="#toc-4" style="padding-left:18px;font-size:12.5px;">1.2 性能约束</a><a href="#toc-5">二、候选算法选型</a><a href="#toc-6" style="padding-left:18px;font-size:12.5px;">2.1 选型原则</a><a href="#toc-7" style="padding-left:18px;font-size:12.5px;">2.2 候选模型对比</a><a href="#toc-8" style="padding-left:18px;font-size:12.5px;">2.3 选型结论：双模型策略</a><a href="#toc-9">三、算法系统架构</a><a href="#toc-10">四、数据与训练方案</a><a href="#toc-11" style="padding-left:18px;font-size:12.5px;">4.1 数据采集</a><a href="#toc-12" style="padding-left:18px;font-size:12.5px;">4.2 后训练流程（对标 GR00T N1.7 官方流程）</a><a href="#toc-13" style="padding-left:18px;font-size:12.5px;">4.3 闭环评测</a><a href="#toc-14" style="padding-left:18px;font-size:12.5px;">4.4 部署</a><a href="#toc-15">五、分阶段落地计划</a><a href="#toc-16" style="padding-left:18px;font-size:12.5px;">5.1 快速落地版（2026-10 — 2027-03）</a><a href="#toc-17" style="padding-left:18px;font-size:12.5px;">5.2 升级优化版（2027-04 — 2028-03）</a><a href="#toc-18" style="padding-left:18px;font-size:12.5px;">5.3 未来规划（2028 及以后）</a><a href="#toc-19">六、软件算法预算</a><a href="#toc-20">七、风险与对策</a><a href="#toc-21">八、结论</a><a href="#toc-22">Sources</a>
   </nav>

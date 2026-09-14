@@ -1,34 +1,29 @@
 /**
- * build.mjs — 将 docs/vla-tech.md 转换为自包含的 index.html
- * 用法：node scripts/build.mjs（或 npm run build）
+ * build.mjs — 将 docs/*.md 批量转换为 index.html + worker.js（多页路由）
+ * 用法：npm run build
  * 依赖：marked（npm install marked）
+ *
+ * 约定：
+ *  - docs/*.md 每个文件生成一个页面，路由为 /文件名（如 /beauty_vim）
+ *  - vla-tech.md 作为默认首页（/），同时保留 /vla-tech 与 /vla-tech.html 路由
+ *  - md 内站内链接写相对路径 xxx.md，构建时自动重写为 xxx.html
+ *  - 所有页面共享一个顶部站点导航条，可互相跳转
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, basename } from 'node:path';
 import { marked } from 'marked';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const MD_PATH = join(ROOT, 'docs', 'vla-tech.md');
+const DOCS_DIR = join(ROOT, 'docs');
 const OUT_PATH = join(ROOT, 'index.html');
 const WORKER_PATH = join(ROOT, 'worker.js');
-const md = readFileSync(MD_PATH, 'utf8');
+const HOME_ROUTE = 'vla-tech'; // 默认首页
 
-// ---- 生成标题目录（TOC）----
-const lines = md.split('\n');
-const toc = [];
-let tocSeq = 0;
-for (const line of lines) {
-  const m = line.match(/^(#{2,3})\s+(.+)/); // 只收 h2/h3，h1 作为页面主标题
-  if (m) {
-    const level = m[1].length;
-    const text = m[2].replace(/\*\*|`/g, '').trim();
-    toc.push({ level, text, id: `toc-${++tocSeq}` });
-  }
-}
+// ---- marked 全局配置（toc / extraHeadingSeq 为模块级，渲染前重置）----
+let toc = [];
+let extraHeadingSeq = 0;
 
-// ---- 配置 marked ----
-let extraHeadingSeq = 0; // 不在 TOC 中的标题（h1）用确定性序号 id，避免每次构建产生 diff
 marked.use({
   gfm: true,
   renderer: {
@@ -50,19 +45,40 @@ marked.use({
   },
 });
 
-// ---- 渲染正文 ----
-const bodyHtml = marked.parse(md);
+// ---- 渲染单个 Markdown 页面 ----
+function renderPage(md) {
+  // 生成 TOC（h2/h3；h1 作为页面主标题）
+  const lines = md.split('\n');
+  toc = [];
+  let tocSeq = 0;
+  for (const line of lines) {
+    const m = line.match(/^(#{2,3})\s+(.+)/);
+    if (m) {
+      const level = m[1].length;
+      const text = m[2].replace(/\*\*|`/g, '').trim();
+      toc.push({ level, text, id: `toc-${++tocSeq}` });
+    }
+  }
 
-// ---- 组装 TOC HTML ----
-let tocHtml = '';
-for (const item of toc) {
-  const pad = item.level === 3 ? ' style="padding-left:18px;font-size:12.5px;"' : '';
-  tocHtml += `<a href="#${item.id}"${pad}>${item.text}</a>`;
+  extraHeadingSeq = 0;
+  let bodyHtml = marked.parse(md);
+
+  // 站内链接重写：href="xxx.md" → href="xxx.html"（不影响外链 http(s)）
+  bodyHtml = bodyHtml.replace(/href="([^"]+)\.md"/g, 'href="$1.html"');
+
+  // 组装 TOC HTML
+  let tocHtml = '';
+  for (const item of toc) {
+    const pad = item.level === 3 ? ' style="padding-left:18px;font-size:12.5px;"' : '';
+    tocHtml += `<a href="#${item.id}"${pad}>${item.text}</a>`;
+  }
+
+  return { bodyHtml, tocHtml, toc };
 }
 
 // ---- 页面模板 ----
-const title = '图书馆机器人 VLA 算法技术落地可行性报告';
-const html = `<!DOCTYPE html>
+function buildHtml({ title, navHtml, tocHtml, bodyHtml }) {
+  return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -76,13 +92,19 @@ const html = `<!DOCTYPE html>
   html { scroll-behavior: smooth; }
   body { margin: 0; background: #fff; color: #1f2328;
          font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  /* 顶部站点导航 */
+  .sitenav { display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: center;
+             padding: 10px 24px; background: #f6f8fa; border-bottom: 1px solid var(--border); }
+  .sitenav .label { font-size: 12px; color: #57606a; margin-right: 4px; }
+  .sitenav a { color: #0969da; text-decoration: none; font-size: 14px; }
+  .sitenav a:hover { text-decoration: underline; }
   .layout { display: flex; min-height: 100vh; }
   /* 左侧目录 */
   .toc {
     width: var(--toc-w); flex: 0 0 var(--toc-w);
     border-right: 1px solid var(--border);
     padding: 28px 18px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
-    background: #f6f8fa; font-size: 14px;
+    background: #fff; font-size: 14px;
   }
   .toc .brand { font-weight: 700; font-size: 15px; margin-bottom: 6px; color: #0969da; }
   .toc .brand-sub { font-size: 12px; color: #57606a; margin-bottom: 18px; }
@@ -106,10 +128,11 @@ const html = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+<nav class="sitenav" aria-label="站点导航"><span class="label">📄 页面：</span>${navHtml}</nav>
 <div class="layout">
   <nav class="toc" aria-label="目录">
-    <div class="brand">📚 报告导航</div>
-    <div class="brand-sub">图书馆机器人 VLA 算法技术落地可行性报告</div>
+    <div class="brand">📚 本页目录</div>
+    <div class="brand-sub">${title}</div>
     ${tocHtml}
   </nav>
   <main class="content">
@@ -127,23 +150,82 @@ ${bodyHtml}
 </body>
 </html>
 `;
+}
 
-writeFileSync(OUT_PATH, html, 'utf8');
-console.log(`✔ ${OUT_PATH} 已生成（${(html.length / 1024).toFixed(1)} KB，TOC ${toc.length} 项）`);
+// ---- 主流程：扫描并构建所有页面 ----
+const mdFiles = readdirSync(DOCS_DIR).filter((f) => f.endsWith('.md')).sort();
+if (mdFiles.length === 0) {
+  console.error('✘ docs/ 下没有 Markdown 文件');
+  process.exit(1);
+}
 
-// ---- 生成 Cloudflare Worker（内嵌 HTML）----
-// 用 JSON.stringify 生成合法 JS 字符串字面量，HTML 中的引号/反引号/${} 均安全转义
+const pages = [];
+for (const file of mdFiles) {
+  const route = basename(file, '.md');
+  const md = readFileSync(join(DOCS_DIR, file), 'utf8');
+  const firstH1 = md.match(/^#\s+(.+)/m);
+  const title = firstH1 ? firstH1[1].trim() : route;
+  pages.push({ route, title, md });
+}
+
+// 首页 = HOME_ROUTE 对应页（不存在则取第一个）
+const homeIndex = pages.findIndex((p) => p.route === HOME_ROUTE);
+const homeIdx = homeIndex >= 0 ? homeIndex : 0;
+
+// 站点导航条（首页为 /，其余为 /route）
+const navHtml = pages
+  .map((p) => {
+    const href = p.route === pages[homeIdx].route ? '/' : `/${p.route}`;
+    return `<a href="${href}">${p.route}</a>`;
+  })
+  .join('');
+
+// 逐页生成 HTML
+for (const p of pages) {
+  const { bodyHtml, tocHtml } = renderPage(p.md);
+  p.html = buildHtml({ title: p.title, navHtml, tocHtml, bodyHtml });
+  p.tocCount = toc.length;
+}
+
+// index.html 输出首页
+const homePage = pages[homeIdx];
+writeFileSync(OUT_PATH, homePage.html, 'utf8');
+console.log(`✔ ${OUT_PATH} 已生成（${(homePage.html.length / 1024).toFixed(1)} KB，首页 ${homePage.route}）`);
+
+// ---- 生成 Cloudflare Worker（多页路由，内嵌全部 HTML）----
+// JSON.stringify 生成合法 JS 字符串字面量，引号/反引号/${} 均安全转义
+const routeEntries = new Map();
+for (const p of pages) {
+  const key = p.route === pages[homeIdx].route ? '/' : `/${p.route}`;
+  routeEntries.set(key, p.html);
+  routeEntries.set(key + '.html', p.html);
+}
+// 首页额外别名：/vla-tech、/vla-tech.html
+if (homePage.route !== '/') {
+  routeEntries.set(`/${homePage.route}`, homePage.html);
+  routeEntries.set(`/${homePage.route}.html`, homePage.html);
+}
+
+const pagesObject = [...routeEntries.entries()]
+  .map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)}`)
+  .join(',\n');
+
 const worker = `/**
- * Cloudflare Worker — daff_page 静态页面服务
+ * Cloudflare Worker — daff_page 静态页面服务（多页路由）
  * 本文件由 scripts/build.mjs 自动生成，请勿手改。
- * 更新页面：编辑 docs/vla-tech.md 后运行 npm run build。
+ * 更新页面：编辑 docs/*.md 后运行 npm run build。
  * 部署：将本文件内容粘贴到 Cloudflare Dashboard → Workers → 代码编辑器。
  */
-const HTML = ${JSON.stringify(html)};
+const PAGES = {
+${pagesObject},
+};
 
 export default {
   async fetch(request, env, ctx) {
-    return new Response(HTML, {
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/\\/+$/, '') || '/';
+    const page = PAGES[path] ?? PAGES['/'];
+    return new Response(page, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'public, max-age=3600',
@@ -154,4 +236,5 @@ export default {
 `;
 
 writeFileSync(WORKER_PATH, worker, 'utf8');
-console.log(`✔ ${WORKER_PATH} 已生成（${(worker.length / 1024).toFixed(1)} KB，可直接粘贴到 Cloudflare）`);
+console.log(`✔ ${WORKER_PATH} 已生成（${(worker.length / 1024).toFixed(1)} KB，${routeEntries.size} 条路由）`);
+console.log('  路由：', [...routeEntries.keys()].join('  '));
