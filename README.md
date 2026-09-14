@@ -24,7 +24,7 @@ daff_page/
 └── .gitignore             # 忽略 node_modules / .wrangler 等
 ```
 
-> `index.html` 与 `worker.js` 均由构建脚本自动生成，修改源文档后需重新构建；不要直接编辑它们。
+> `dist/`、`index.html` 与 `worker.js` 均由构建脚本自动生成，修改源文档后需重新构建；不要直接编辑它们。`dist/` 必须提交到 Git（Cloudflare 构建仅执行 deploy 命令，不执行 build）。
 
 ## 前置要求
 
@@ -41,7 +41,7 @@ npm install
 npm run build
 ```
 
-构建产物输出到根目录 `index.html`。
+构建产物输出到 `dist/`（独立 HTML 静态文件）与 `worker.js`（轻量路由兜底）；根目录 `index.html` 为首页副本，仅本地预览用。
 
 ## 本地预览
 
@@ -65,7 +65,7 @@ start index.html
 | 访问地址 | http://127.0.0.1:8787/ | http://localhost:8787/ |
 | 适用场景 | 本项目（单页面，无绑定）够用 | 需要调试完整 Worker 环境时 |
 
-本项目的 Worker 只有一个 `fetch` 返回内嵌 HTML，`npm run dev` 已足够且无 Node 版本门槛；`npx wrangler dev` 是官方全能方案，但需要 Node ≥ 22。
+本项目的 Worker 只做 `dist/` 静态资产的路由兜底（`/xxx → /xxx.html`），`npm run dev` 已足够且无 Node 版本门槛；`npx wrangler dev` 是官方全能方案，但需要 Node ≥ 22。
 
 ## 多页面与站内链接
 
@@ -107,7 +107,7 @@ git push
 
 ## 部署到 Cloudflare
 
-## 部署架构（Workers Static Assets）
+### 部署架构（Workers Static Assets）
 
 页面以**独立静态文件**形式部署，不再内嵌进 Worker：
 
@@ -137,6 +137,60 @@ git push
 | --- | --- |
 | Build command | `npm run build` |
 | Build output directory | `/`（根目录） |
+
+### 部署原理（FAQ）
+
+**Q1：Cloudflare 部署时用的是哪个命令？**
+
+用的是 `npx wrangler deploy`，**不是** `wrangler dev`：
+
+| 命令 | 性质 | 作用 |
+| --- | --- | --- |
+| `npx wrangler dev` | 本地开发 | 本地起服务器模拟 Worker，**不发布** |
+| `npx wrangler deploy` | 正式部署 | 打包上传到 Cloudflare 边缘节点，**发布生效** |
+
+云端的 deploy 命令来自 Cloudflare 控制台的部署配置（本项目为 `npx wrangler deploy`），Git 集成在每次 push 后自动执行。
+
+**Q2：`wrangler.jsonc` 起什么作用？**
+
+它是部署的"地图"，告诉 wrangler 一切关键信息：
+
+```jsonc
+{
+  "name": "wispy-butterfly-e184",   // 部署到哪个 Worker
+  "main": "worker.js",              // 代码入口
+  "assets": {
+    "directory": "./dist",          // 静态资产目录
+    "binding": "ASSETS"             // worker 内通过 env.ASSETS 访问
+  }
+}
+```
+
+**Cloudflare 不会自动扫描仓库找 worker.js**，而是完全按这份配置执行。云端部署链路：
+
+```
+GitHub push
+  → Cloudflare 构建环境：npm clean-install → npx wrangler deploy
+  → wrangler 读取 wrangler.jsonc
+  → 打包 worker.js（0.8 KB 入口） + 收集 dist/ 静态文件
+  → 上传到 Cloudflare 边缘 → 生效
+```
+
+**Q3：没有 `wrangler.jsonc` 时会怎样？（本仓库的踩坑经历）**
+
+wrangler 会启动**交互式初始化向导**自动"猜测"项目设置。在 Cloudflare 这类非交互式环境中，它会静默采用默认值：
+
+```
+Detected Project Settings:
+ - Framework: Static            ← 自动检测为静态站点
+ - Output Directory: .          ← 自动把输出目录猜成仓库根目录
+? Do you want to modify these settings?
+🤖 Using fallback value in non-interactive context: no
+```
+
+于是自动生成 `assets.directory = "."` —— 把**整个仓库根目录（含 node_modules）**当静态资产上传，148 MiB 的 `workerd` 二进制撞上 25 MiB 单文件上限，部署失败。
+
+**结论**：没有 `wrangler.jsonc` 时部署依赖 wrangler 的"启发式猜测"，猜错就翻车；配置文件在手，部署行为才完全可控。
 
 ## 技术说明
 
