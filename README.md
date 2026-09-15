@@ -1,6 +1,6 @@
 # daff_page
 
-图书馆机器人 VLA 算法技术落地可行性报告的静态站点仓库。源文档为 Markdown，通过构建脚本生成自包含的 `index.html`，部署到 Cloudflare 静态托管。
+图书馆机器人 VLA 算法技术落地可行性报告的静态站点仓库。源文档为 Markdown，通过构建脚本生成自包含的 `index.html`，部署到 Cloudflare 静态托管，可以访问[https://wispy-butterfly-e184.adafftang0617.workers.dev/](https://wispy-butterfly-e184.adafftang0617.workers.dev/)。
 
 ## 目录结构
 
